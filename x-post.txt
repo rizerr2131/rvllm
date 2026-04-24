@@ -1,36 +1,26 @@
-updated rvLLM and synced the public repo/docs/paper/site to the current H100 results.
+that's a big claim, i know. 
+https://github.com/m0at/rvllm
+web: https://docs.solidsf.com/docs/bench
+proud to announce: WE DID IT!!!!  
 
-current direct-engine comparison against vLLM 0.19.0 on the same H100, same Qwen2.5-7B snapshot, same output len:
+we're outperforming vLLM on raw engine throughput, using a new 31B model from google, while also reducing VRAM required by 9.5x - enabling on-card tensor parallelism for even crazier speedups on the same hardware
 
-- N=1: 133.1 tok/s vs 165.5
-- N=32: 4407.5 tok/s vs 4467.7
-- N=64: 8038.0 tok/s vs 7972.1
-- N=128: 13110.1 tok/s vs 13903.5
+when i first posted, it wasn't ready, i needed help, and thanks to the amazing power of twitter i got connected with world-class engineers that gave me some tips and guidance along the way. the encouragement to keep going was also fundamental in my commitment to getting past stoppage points. you guys made all the difference, you know who you are, thank you, each of you, so very very much.
 
-so the honest headline is:
+so what happened? rvLLM didn't work? it worked? i didn't understand what that was all about!!  
 
-- rvLLM is basically tied at N=32
-- slightly ahead at N=64
-- still behind at N=1 and N=128
+parts of rvLLM worked the whole time, just depending what you were looking for. throughput and perplexity were shot though, and i was trying to do too much. people forked it for the loading speedup and it's out there in use already which is great, but i went all the way with it, including trying to beat cublast (dumb!).
 
-the important architecture correction was that batch-1 had changed again.
+also, i got into TPUs i guess? shoutout adam lol  so yeah, now you can:  rvLLM-xla to run your inference on google TPU lol, i suggest using v6e-4 for the 31B, it's insane and cheap
 
-the docs previously said the normal T=1 path was `CublasGemvDecode`. that was already stale.
-the current default batch-1 path is the reusable batched scratch path, and that lifted N=1 from 127.9 to 133.1 tok/s without hurting high batch.
+Provide a caption (optional)
+https://docs.solidsf.com/docs/bench
 
-the batched side is still the same explicit hybrid policy:
-
-- QKV / O / down on cuBLAS or cublasLt
-- GateUp + SiLU on CUTLASS
-
-and inside the stack, some parts are still materially faster than our own earlier baselines:
-
-- Rust PTX JIT fused kernels are 2-7.5x faster than our hand-written CUDA in measured decode microbenches
-- FA3 v3 + no-fallback validation was a 31-42% jump over the previous rvLLM attention path
-- Zig SIMD sampling / conversion backend is faster on several hot CPU-side ops
-
-still true: stock vLLM has the stronger low-batch decode stack overall. but rvLLM is now very close in the batched regime, and the public materials finally match the real shipped architecture instead of the previous one-step-old story.
-
-repo: https://github.com/m0at/rvllm
-site: https://m0at.github.io/rvllm/
-paper: https://m0at.github.io/rvllm/paper/rvllm.pdf
+Provide a caption (optional)
+i think things will get a lot more active with this release - exciting times!
+constructive criticism is super welcome, please try to prove my bench results wrong. would love to see more people give this a shot on proper hardware.
+if you do find errors, we are better together than apart - let me know via PR/git issue, i'll jump on it, i'm financially invested in getting this right. try to be clear in your findings, be verbose, i prefer excessive wordiness with this stuff as interpretations are not always the same across every concept
+next steps: this project is continuing forward, getting more serious, and will support every model i have compute credits for. i'm happy it came together, and thankful to have made some friends in the process.  
+cheers,  
+andy  
+https://github.com/m0at/rvllm

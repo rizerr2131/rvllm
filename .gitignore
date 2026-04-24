@@ -11,6 +11,8 @@ target/
 .env
 .instance_id
 results_*.json
+v3/tools/bench_out/
+REVISION
 __pycache__/
 *.pyc
 .mypy_cache/
@@ -29,3 +31,4 @@ build/
 *.fdb_latexmk
 *.synctex.gz
 zig/.zig-cache/
+.wrangler/

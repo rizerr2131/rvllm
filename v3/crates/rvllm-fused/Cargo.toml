@@ -1,0 +1,23 @@
+[package]
+name = "rvllm-fused"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+# rvllm-fused: 8 fused kernels (norm+quant, residual+norm+quant,
+# silu+mul+quant, rope+kv-write, argmax, residual_add, embedding).
+# Each ships a Rust launcher with shape/alignment validation and a
+# pure-Rust f32 reference impl. See v3/specs/12-fused.md.
+
+[features]
+default = []
+cuda = ["rvllm-kernels/cuda", "rvllm-mem/cuda", "dep:cudarc"]
+
+[dependencies]
+rvllm-core = { workspace = true }
+rvllm-mem = { workspace = true }
+rvllm-kernels = { workspace = true }
+half = { workspace = true }
+cudarc = { version = "0.19", features = ["driver", "cuda-version-from-build-system"], optional = true }

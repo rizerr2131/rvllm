@@ -1,0 +1,28 @@
+[package]
+name = "rvllm-mem"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+# rvllm-mem: HBM arena, Region, Tensor, Stream, Event, CaptureScope, GraphSafe,
+#            PinnedPool, KvLayout. Per v3/specs/{04,05}.md.
+#
+# The type-level invariants (GraphSafe, lifetimes that reject realloc-in-capture,
+# type-state PendingStep) compile everywhere. Actual CUDA FFI is behind the
+# `cuda` feature so the crate builds and tests on hosts without CUDA.
+
+[features]
+default = []
+cuda = ["dep:cudarc"]
+# GB10 / sm_121 target: adds `UnifiedArena` on top of `HbmArena`.
+# Pair with `--features cuda` on GB10 hardware; `gb10` alone gives the
+# bookkeeping type with a host-stub backing so downstream crates can
+# reference the type unconditionally in their `cfg` trees.
+gb10 = []
+
+[dependencies]
+rvllm-core = { workspace = true }
+half = { workspace = true }
+cudarc = { version = "0.19", features = ["driver", "cuda-version-from-build-system"], optional = true }

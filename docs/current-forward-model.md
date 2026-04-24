@@ -1,11 +1,11 @@
-# Current Forward Model (April 4, 2026)
+# Current Forward Model (April 7, 2026)
 
 This is the current high-level forward-path model for `rvLLM`, not the older pre-fusion trace.
 
 The two important ideas now are:
 
-1. `T=1` and `T>=2` are intentionally different execution regimes.
-2. The runner makes an explicit per-op GEMM policy choice instead of letting CUTLASS availability accidentally choose the path.
+1. Normal decode and batched execution now converge on one canonical default lane.
+2. Legacy single-token decode escapes are no longer part of the default path.
 
 ## Current Path Selection
 
@@ -14,19 +14,14 @@ The two important ideas now are:
 Normal batch-1 decode now defaults to:
 
 ```text
-Batched
+BatchedV2
 ```
 
-That was a deliberate fix. The previous default had already left the older fused path, but it was still staying on the legacy single-token family instead of the reusable batched scratch path that wins end-to-end.
-
-The batch-1 selection order is now:
+The selection order is now:
 
 ```text
 explicit experimental env paths
--> FP8 decode if FP8 weights are active
--> Batched (default normal path)
--> CublasGemvDecode if RVLLM_BATCHED_DECODE_1=0
--> legacy FusedDecode only if forced
+-> BatchedV2 (default normal path)
 ```
 
 Current verified number on H100 / Qwen2.5-7B / `output-len=128`:
@@ -35,12 +30,12 @@ Current verified number on H100 / Qwen2.5-7B / `output-len=128`:
 
 ### Batched (`T>=2`)
 
-Batched prefill and batched decode use the normal layer stack plus an explicit GEMM policy.
+Batched prefill and batched decode use the same normal `BatchedV2` layer stack plus an explicit GEMM policy.
 
-Current default:
+Current default path:
 
 ```text
-GemmStrategy::Hybrid
+BatchedV2 + GemmStrategy::Hybrid
 ```
 
 Hybrid means:
@@ -59,7 +54,7 @@ That is fixed now.
 
 ## Current Layer Shape
 
-### Batch-1 normal decode
+### Default decode
 
 Per layer:
 
@@ -96,34 +91,38 @@ Same H100, same Qwen2.5-7B snapshot, `output-len=128`, direct engine:
 
 | N | vLLM 0.19.0 | rvLLM | rvLLM / vLLM |
 |---:|---:|---:|---:|
-| 1 | 165.5 | 133.1 | 0.80x |
-| 32 | 4467.7 | 4407.5 | 0.99x |
-| 64 | 7972.1 | 8038.0 | 1.01x |
-| 128 | 13903.5 | 13110.1 | 0.94x |
+| 1 | 167.5 | 132.7 | 0.79x |
+| 32 | 4964.2 | 4494.9 | 0.91x |
+| 64 | 9312.6 | 8503.4 | 0.91x |
+| 96 | 13085.9 | 10530.6 | 0.80x |
+| 128 | 16825.3 | 13718.1 | 0.82x |
 
 ## What Is Still Behind
 
 - `N=1` decode is still materially behind vLLM.
-- `N=32` and `N=64` are basically tied now.
-- `N=128` is close, but still a few percent behind.
+- `N=32` and `N=64` are improved, but still behind.
+- `N=128` is still meaningfully behind.
+- the earlier `89f` gate-aux `N=64` win was invalid because that path skipped FFN down-proj.
 - `cublasLt` autotune cache behavior is still flaky on some shapes and should fall back more aggressively when a cached algo goes bad.
 
 ## Relevant Controls
 
 ```bash
-RVLLM_CUBLAS_DECODE=0|1
-RVLLM_BATCHED_DECODE_1=0|1
 RVLLM_BATCHED_GEMM_STRATEGY=cublas|hybrid|cutlass
+RVLLM_PERSISTENT=1
+RVLLM_PERSISTENT_V2=1
 RVLLM_PERSISTENT_V3=1
+RVLLM_MEGAKERNEL=1
+RVLLM_MEGAKERNEL_V2=1
 RVLLM_FP8_WEIGHTS=1
 ```
 
 ## Bottom Line
 
-The current system is no longer “fused decode by default, CUTLASS when available.”
+The current system is no longer “legacy single-token decode by default, batched as a side path.”
 
 It is:
 
-- batch-1 normal decode on the reusable `Batched` path
-- batched execution on an explicit hybrid policy
+- normal decode and batched execution on `BatchedV2`
+- explicit hybrid GEMM policy inside that lane
 - experimental persistent and megakernel paths kept separate from the normal path
